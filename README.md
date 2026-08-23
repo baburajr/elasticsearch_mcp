@@ -11,7 +11,7 @@ Any MCP agent — Claude, Cursor, a custom LLM agent — can query, diagnose, ma
 ## Install
 
 ```bash
-git clone <your-repo> elasticsearch-mcp && cd elasticsearch-mcp
+git clone https://github.com/baburajr/elasticsearch_mcp.git && cd elasticsearch_mcp
 uv sync            # or: pip install -e ".[dev]"
 cp .env.example .env
 pytest -q
@@ -44,7 +44,7 @@ elasticsearch-mcp --transport streamable-http
 
 ## Tools
 
-34 tools. Write tools (marked ✎) need `ES_MCP_READ_ONLY=false`; destructive ones (marked ⚠) additionally need `ES_MCP_ALLOW_DESTRUCTIVE=true` and `confirm=true` in the call.
+34 tools. Write tools (marked ✎) need `ES_MCP_READ_ONLY=false` and `confirm=true` in the call. Destructive ones (marked ⚠) additionally need `ES_MCP_ALLOW_DESTRUCTIVE=true`.
 
 **Query**
 
@@ -122,7 +122,7 @@ All variables use the `ES_MCP_` prefix, read from the environment or `.env`.
 | `VERIFY_CERTS`, `CA_CERTS`, `CLIENT_CERT`, `CLIENT_KEY` | `true` | TLS |
 | `REQUEST_TIMEOUT`, `CONNECT_TIMEOUT`, `MAX_RETRIES` | `30`, `10`, `3` | Retries cover 429/502/503/504 and connect errors, with jittered backoff and `Retry-After` |
 | `READ_ONLY` | `true` | Master switch for all write tools |
-| `ALLOW_DESTRUCTIVE` | `false` | Second gate for restore, reindex, put_mapping |
+| `ALLOW_DESTRUCTIVE` | `false` | Second gate for restore_snapshot, reindex, put_mapping, update_settings, delete_by_query, update_by_query |
 | `INDEX_ALLOW` | `*` | Glob allow-list |
 | `INDEX_DENY` | `.*,security-*` | Glob deny-list; deny wins |
 | `DEFAULT_SIZE`, `MAX_RESULT_SIZE` | `10`, `200` | Hit caps |
@@ -137,14 +137,30 @@ All variables use the `ES_MCP_` prefix, read from the environment or `.env`.
 Four independent layers, all failing closed:
 
 1. **Index policy** — allow-list and deny-list checked on every call; deny wins; wildcard writes across the whole cluster refused.
-2. **Read-only** — mutating tools refuse unless `READ_ONLY=false`.
-3. **Destructive gate** — restore, reindex, and put_mapping additionally need `ALLOW_DESTRUCTIVE=true` and an explicit `confirm=true` argument in the call itself.
+2. **Read-only** — every write tool refuses unless `READ_ONLY=false`, and each also requires an explicit `confirm=true` argument in the call itself.
+3. **Destructive gate** — restore_snapshot, reindex, put_mapping, update_settings, delete_by_query and update_by_query additionally need `ALLOW_DESTRUCTIVE=true`.
 4. **Query limits** — size clamp, agg bucket cap, agg nesting depth cap, deep-paging rejection, injected search timeout.
 
 Tools return errors as readable text (`ERROR (run_query): ...`) rather than raising, so the model can correct itself instead of stalling.
 
 Recommended production posture: a dedicated ES API key with `read` on exactly the allowed indices, `READ_ONLY=true`, and a separate write-enabled instance only if you actually need reindex/restore from the assistant.
 
+## Docker
+
+```bash
+docker build -t elasticsearch-mcp .
+docker run --rm -p 8000:8000 \
+  -e ES_MCP_HOSTS=https://es.internal:9200 \
+  -e ES_MCP_API_KEY=base64-encoded-api-key \
+  elasticsearch-mcp            # runs the streamable-http transport, read-only
+```
+
+The image runs as a non-root user and defaults to `ES_MCP_READ_ONLY=true`.
+
 ## Extending
 
 Add a module under `src/es_mcp/tools/`, expose `register(server, ctx)`, wire it in `server.build_server`. Use `ctx.guard` for policy checks and `ctx.render` for output so limits apply automatically.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
