@@ -2,7 +2,7 @@
 
 MCP server for Elasticsearch, built directly on the REST API (no `elasticsearch-py` dependency, so it also works against OpenSearch and managed clusters that only expose HTTP).
 
-Any MCP agent — Claude, Cursor, a custom LLM agent — can query, diagnose, map, ingest, and run gated write operations. 30+ tools. Read-only by default; every write path is gated.
+Any MCP agent — Claude, Cursor, a custom LLM agent — can query, diagnose, map, ingest, and run gated write operations. 34 tools. Read-only by default; every write path is gated.
 
 ![elasticsearch-mcp demo](demo/es-mcp.gif)
 
@@ -44,6 +44,8 @@ elasticsearch-mcp --transport streamable-http
 
 ## Tools
 
+34 tools. Write tools (marked ✎) need `ES_MCP_READ_ONLY=false`; destructive ones (marked ⚠) additionally need `ES_MCP_ALLOW_DESTRUCTIVE=true` and `confirm=true` in the call.
+
 **Query**
 
 | Tool | What it does |
@@ -53,6 +55,20 @@ elasticsearch-mcp --transport streamable-http
 | `explain_query` | `_validate?rewrite=true` + `profile` timing breakdown + per-document `_explain` |
 | `count_documents` | Match count without fetching hits |
 
+**SQL**
+
+| Tool | What it does |
+|---|---|
+| `sql_query` | Run Elasticsearch SQL via `_sql` (SELECT only); the `FROM` target is checked against the index policy. Returns columns, rows, and a paging cursor |
+| `sql_translate` | Translate an SQL SELECT into native Query DSL via `_sql/translate`, without running it |
+
+**Paging (point-in-time)**
+
+| Tool | What it does |
+|---|---|
+| `open_pit` / `close_pit` | Open/close a point-in-time to page a large result set consistently |
+| `paged_search` | Page past the 10000 deep-paging limit using the PIT + `search_after`, with an automatic `_shard_doc` tiebreak |
+
 **Diagnostics**
 
 | Tool | What it does |
@@ -61,6 +77,8 @@ elasticsearch-mcp --transport streamable-http
 | `index_health` | Per index: docs, store, segments, avg query and index latency, merges |
 | `shard_allocation` | `_cat/shards` plus `_cluster/allocation/explain` decider reasons for unassigned shards |
 | `find_slow_queries` | Indices ranked by avg query latency, running search tasks, thread-pool rejections, slowlog thresholds |
+| `cat_nodes` | Nodes with role, version, heap/RAM/CPU/load, and master flag |
+| `field_caps` | Field types across indices via `_field_caps`; flags fields mapped as different types in different indices |
 
 **Mapping**
 
@@ -69,16 +87,27 @@ elasticsearch-mcp --transport streamable-http
 | `list_indices` | Indices and aliases with doc counts and size |
 | `get_mapping` | Flattened `field path -> type` catalog including multi-fields |
 | `analyze_text` | Token output of an analyzer, for debugging zero-hit match queries |
-| `put_mapping` | Additive mapping changes (write-gated) |
+| `put_mapping` ✎⚠ | Additive mapping changes |
+
+**Ingest**
+
+| Tool | What it does |
+|---|---|
+| `index_document` ✎ | Index a single document (create or overwrite) |
+| `bulk_index` ✎ | Bulk index many documents in one `_bulk` request, with error summary |
 
 **Operations**
 
 | Tool | What it does |
 |---|---|
 | `list_snapshot_repositories`, `list_snapshots`, `snapshot_status` | Snapshot inventory and progress |
-| `create_snapshot` | Snapshot selected indices, async by default |
-| `restore_snapshot` | Restore, with pre-flight check for existing open indices and rename support |
-| `reindex` | Async reindex with query, pipeline, script, slicing, throttling; returns a task id |
+| `create_snapshot` ✎ | Snapshot selected indices, async by default |
+| `restore_snapshot` ✎⚠ | Restore, with pre-flight check for existing open indices and rename support |
+| `reindex` ✎⚠ | Async reindex with query, pipeline, script, slicing, throttling; returns a task id |
+| `delete_by_query` ✎⚠ | Delete matching docs (match_all refused); async, returns a task id |
+| `update_by_query` ✎⚠ | Painless script update of matching docs (match_all refused); async, returns a task id |
+| `update_settings` ✎⚠ | Update dynamic index settings; static settings refused |
+| `alias_actions` ✎ | Atomic alias add/remove, for zero-downtime reindex cutover |
 | `get_task`, `cancel_task` | Poll or kill long-running tasks |
 | `cluster_info` | Version, distribution, and the active safety policy |
 
