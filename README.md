@@ -2,7 +2,11 @@
 
 MCP server for Elasticsearch, built directly on the REST API (no `elasticsearch-py` dependency, so it also works against OpenSearch and managed clusters that only expose HTTP).
 
-21 tools covering query, diagnostics, mapping, and cluster operations. Read-only by default; every write path is gated.
+Any MCP agent — Claude, Cursor, a custom LLM agent — can query, diagnose, map, ingest, and run gated write operations. 30+ tools. Read-only by default; every write path is gated.
+
+![elasticsearch-mcp demo](demo/es-mcp.gif)
+
+*Live demo: an agent lists indices, reads the mapping, runs a query and SQL, and gets blocked when it tries an unsafe write. See [`demo/demo.py`](demo/demo.py).*
 
 ## Install
 
